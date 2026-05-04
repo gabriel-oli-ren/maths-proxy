@@ -1,0 +1,578 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>MathSupport Proxy</title>
+  <!-- Google Fonts + Material Icons -->
+  <link href="https://fonts.googleapis.com/css2?family=Inter:opsz,wght@14..32,400;14..32,500;14..32,600;14..32,700&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:opsz,wght,FILL,GRAD@20..48,100..700,0,1" />
+  <style>
+    * {
+      margin: 0;
+      padding: 0;
+      box-sizing: border-box;
+    }
+    body {
+      background: #0a0e17;
+      font-family: 'Inter', system-ui, -apple-system, sans-serif;
+      height: 100vh;
+      overflow: hidden;
+      color: #e6edf3;
+    }
+    /* ========= SIDEBAR (colapsable) ========= */
+    .navbar {
+      position: fixed;
+      left: 0;
+      top: 0;
+      bottom: 0;
+      width: 72px;
+      background: #0f1420;
+      border-right: 1px solid #2a303c;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      padding: 16px 0;
+      transition: width 0.2s ease;
+      z-index: 100;
+      overflow-x: hidden;
+    }
+    .navbar.expanded {
+      width: 240px;
+    }
+    .nav-brand {
+      margin-bottom: 32px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      width: 100%;
+    }
+    .nav-brand img {
+      width: 40px;
+      height: 40px;
+      border-radius: 12px;
+    }
+    .nav-brand span {
+      display: none;
+      margin-left: 12px;
+      font-weight: 600;
+      font-size: 1.2rem;
+    }
+    .navbar.expanded .nav-brand span {
+      display: inline;
+    }
+    .nav-item {
+      display: flex;
+      align-items: center;
+      width: 100%;
+      padding: 10px 16px;
+      margin: 4px 0;
+      color: #b3c0d2;
+      text-decoration: none;
+      border-radius: 12px;
+      transition: 0.2s;
+      white-space: nowrap;
+      cursor: pointer;
+    }
+    .nav-item:hover {
+      background: #1e2538;
+      color: white;
+    }
+    .nav-item .material-symbols-outlined {
+      font-size: 24px;
+      min-width: 40px;
+      text-align: center;
+    }
+    .nav-item span:last-child {
+      margin-left: 8px;
+      display: none;
+    }
+    .navbar.expanded .nav-item span:last-child {
+      display: inline;
+    }
+    .nav-footer {
+      margin-top: auto;
+      width: 100%;
+    }
+    /* ========= MAIN LAYOUT ========= */
+    .app-container {
+      margin-left: 72px;
+      height: 100vh;
+      display: flex;
+      flex-direction: column;
+      overflow: hidden;
+    }
+    /* ========= TAB BAR ========= */
+    .tab-bar {
+      background: #0f1420;
+      border-bottom: 1px solid #2a303c;
+      padding: 8px 12px 0 12px;
+      display: flex;
+      gap: 6px;
+      overflow-x: auto;
+      scrollbar-width: thin;
+    }
+    .tab {
+      background: #1a1f2e;
+      border-radius: 8px 8px 0 0;
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      padding: 6px 10px;
+      cursor: pointer;
+      transition: 0.1s;
+      border-bottom: 2px solid transparent;
+      white-space: nowrap;
+    }
+    .tab.active {
+      background: #0a0e17;
+      border-bottom-color: #2f81f7;
+    }
+    .tab-title {
+      font-size: 0.8rem;
+      max-width: 140px;
+      overflow: hidden;
+      text-overflow: ellipsis;
+    }
+    .tab-close {
+      background: none;
+      border: none;
+      color: #8b949e;
+      cursor: pointer;
+      font-size: 1.1rem;
+      line-height: 1;
+      padding: 0 4px;
+      border-radius: 4px;
+    }
+    .tab-close:hover {
+      background: #2a303c;
+      color: #f85149;
+    }
+    .new-tab-btn {
+      background: #1a1f2e;
+      border: none;
+      color: #e6edf3;
+      font-size: 1.2rem;
+      cursor: pointer;
+      padding: 0 16px;
+      border-radius: 8px;
+      font-weight: bold;
+    }
+    /* ========= BROWSER NAVBAR ========= */
+    .browser-nav {
+      background: #0a0e17;
+      padding: 8px 16px;
+      display: flex;
+      gap: 12px;
+      align-items: center;
+      border-bottom: 1px solid #2a303c;
+    }
+    .nav-controls {
+      display: flex;
+      gap: 6px;
+    }
+    .nav-btn {
+      background: #1a1f2e;
+      border: none;
+      color: #e6edf3;
+      width: 32px;
+      height: 32px;
+      border-radius: 8px;
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      cursor: pointer;
+      font-size: 1.1rem;
+    }
+    .address-bar {
+      flex: 1;
+      display: flex;
+      align-items: center;
+      background: #1a1f2e;
+      border-radius: 24px;
+      padding: 4px 12px;
+      gap: 8px;
+    }
+    .address-favicon {
+      width: 18px;
+      height: 18px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 1rem;
+    }
+    .address-input {
+      flex: 1;
+      background: transparent;
+      border: none;
+      color: white;
+      font-size: 0.9rem;
+      padding: 8px 0;
+      outline: none;
+    }
+    /* ========= IFRAME CONTENT ========= */
+    .browser-content {
+      flex: 1;
+      position: relative;
+      background: white;
+    }
+    .browser-iframe {
+      width: 100%;
+      height: 100%;
+      border: none;
+      display: block;
+    }
+    .loading-overlay {
+      position: absolute;
+      top: 0;
+      left: 0;
+      right: 0;
+      bottom: 0;
+      background: rgba(10,14,23,0.9);
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      z-index: 10;
+      transition: opacity 0.2s;
+      backdrop-filter: blur(4px);
+    }
+    .loading-spinner {
+      width: 40px;
+      height: 40px;
+      border: 3px solid #2a303c;
+      border-top-color: #2f81f7;
+      border-radius: 50%;
+      animation: spin 0.8s linear infinite;
+    }
+    .loading-text {
+      margin-top: 12px;
+      color: #c9d1d9;
+      font-size: 0.8rem;
+    }
+    @keyframes spin { to { transform: rotate(360deg); } }
+    .hidden { display: none; }
+    /* toggle sidebar hack */
+    .toggle-sidebar {
+      position: fixed;
+      left: 8px;
+      top: 12px;
+      z-index: 200;
+      background: #1a1f2e;
+      border: none;
+      color: white;
+      padding: 6px;
+      border-radius: 8px;
+      cursor: pointer;
+      display: none;
+    }
+    @media (max-width: 768px) {
+      .navbar { width: 0; }
+      .app-container { margin-left: 0; }
+      .toggle-sidebar { display: block; }
+      .navbar.expanded { width: 240px; }
+    }
+  </style>
+</head>
+<body>
+<button class="toggle-sidebar" id="toggle-sidebar">☰</button>
+<div class="navbar" id="sidebar">
+  <div class="nav-brand">
+    <img src="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='%232f81f7'%3E%3Cpath d='M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm-1 17.93c-3.94-.49-7-3.85-7-7.93 0-.62.08-1.21.21-1.79L9 15v1c0 1.1.9 2 2 2v1.93zm6.9-2.54c-.26-.81-1-1.39-1.9-1.39h-1v-3c0-.55-.45-1-1-1H8v-2h2c.55 0 1-.45 1-1V7h2c1.1 0 2-.9 2-2v-.41c2.93 1.19 5 4.06 5 7.41 0 2.08-.8 3.97-2.1 5.39z'/%3E%3C/svg%3E" alt="Logo">
+    <span>MathSupport</span>
+  </div>
+  <a class="nav-item" id="nav-home">
+    <span class="material-symbols-outlined">home</span>
+    <span>Inicio</span>
+  </a>
+  <a class="nav-item" id="nav-games">
+    <span class="material-symbols-outlined">sports_esports</span>
+    <span>Juegos</span>
+  </a>
+  <div class="nav-footer">
+    <a class="nav-item" id="nav-settings">
+      <span class="material-symbols-outlined">settings</span>
+      <span>Ajustes</span>
+    </a>
+  </div>
+</div>
+
+<div class="app-container">
+  <div class="tab-bar" id="tab-bar">
+    <div class="tab active" data-tab-id="0" data-url="">
+      <span class="tab-title">New Tab</span>
+      <button class="tab-close">×</button>
+    </div>
+    <button class="new-tab-btn" id="new-tab-btn">+</button>
+  </div>
+  <div class="browser-nav">
+    <div class="nav-controls">
+      <button class="nav-btn" id="nav-back" title="Atrás">←</button>
+      <button class="nav-btn" id="nav-forward" title="Adelante">→</button>
+      <button class="nav-btn" id="nav-reload" title="Recargar">⟳</button>
+      <button class="nav-btn" id="nav-fullscreen" title="Pantalla completa">⛶</button>
+    </div>
+    <div class="address-bar">
+      <div class="address-favicon" id="address-favicon">🌐</div>
+      <input type="text" class="address-input" id="address-input" placeholder="Escribe una URL o busca" autocomplete="off" spellcheck="false">
+    </div>
+  </div>
+  <div class="browser-content" id="browser-content">
+    <div class="loading-overlay hidden" id="loading-overlay">
+      <div class="loading-spinner"></div>
+      <div class="loading-text">Cargando sitio...</div>
+    </div>
+    <iframe id="proxy-iframe" class="browser-iframe" sandbox="allow-same-origin allow-scripts allow-popups allow-forms allow-modals allow-downloads allow-pointer-lock allow-top-navigation-by-user-activation" allowfullscreen></iframe>
+  </div>
+</div>
+
+<script>
+  // ================= CONFIGURACIÓN =================
+  // Apunta a tu Worker de Cloudflare (search.mathssupport.cat)
+  const WORKER_URL = 'https://search.mathssupport.cat';
+  
+  // Estado de pestañas
+  let tabsMap = new Map(); // id -> { url, title, iframe, historyIndex, history }
+  let currentTabId = 0;
+  let tabCounter = 1;
+  
+  // Elementos DOM
+  const iframe = document.getElementById('proxy-iframe');
+  const addressInput = document.getElementById('address-input');
+  const reloadBtn = document.getElementById('nav-reload');
+  const backBtn = document.getElementById('nav-back');
+  const forwardBtn = document.getElementById('nav-forward');
+  const fullscreenBtn = document.getElementById('nav-fullscreen');
+  const newTabBtn = document.getElementById('new-tab-btn');
+  const tabBar = document.getElementById('tab-bar');
+  const loadingOverlay = document.getElementById('loading-overlay');
+  const faviconDiv = document.getElementById('address-favicon');
+  const sidebar = document.getElementById('sidebar');
+  const toggleBtn = document.getElementById('toggle-sidebar');
+  
+  // ========== Funciones de pestañas ==========
+  function createTabId() {
+    return tabCounter++;
+  }
+  
+  function addTab(url = null, title = 'New Tab') {
+    const id = createTabId();
+    const tabDiv = document.createElement('div');
+    tabDiv.className = 'tab';
+    tabDiv.dataset.tabId = id;
+    tabDiv.innerHTML = `
+      <span class="tab-title">${escapeHtml(title)}</span>
+      <button class="tab-close">×</button>
+    `;
+    tabBar.insertBefore(tabDiv, newTabBtn);
+    
+    // Crear iframe oculto
+    const newIframe = document.createElement('iframe');
+    newIframe.className = 'browser-iframe';
+    newIframe.setAttribute('sandbox', 'allow-same-origin allow-scripts allow-popups allow-forms allow-modals allow-downloads allow-pointer-lock allow-top-navigation-by-user-activation');
+    newIframe.setAttribute('allowfullscreen', 'true');
+    newIframe.style.display = 'none';
+    document.getElementById('browser-content').appendChild(newIframe);
+    
+    tabsMap.set(id, {
+      url: url,
+      title: title,
+      iframe: newIframe,
+      historyIndex: -1,
+      history: []
+    });
+    
+    if (url) {
+      navigateTab(id, url);
+    } else {
+      // Página en blanco o página de inicio personalizada
+      navigateTab(id, 'https://example.com');
+    }
+    return id;
+  }
+  
+  function switchTab(tabId) {
+    if (currentTabId === tabId) return;
+    // Ocultar iframe actual
+    const current = tabsMap.get(currentTabId);
+    if (current) current.iframe.style.display = 'none';
+    // Mostrar nueva
+    const next = tabsMap.get(tabId);
+    if (next) {
+      next.iframe.style.display = 'block';
+      currentTabId = tabId;
+      // Actualizar UI
+      updateAddressBar(next.url);
+      updateFavicon(next.url);
+      // Marcar pestaña activa
+      document.querySelectorAll('.tab').forEach(tab => tab.classList.remove('active'));
+      const activeTabElem = document.querySelector(`.tab[data-tab-id="${tabId}"]`);
+      if (activeTabElem) activeTabElem.classList.add('active');
+      
+      // Si el iframe está vacío o en about:blank, cargar la URL guardada
+      const iframeSrc = next.iframe.src;
+      if (!iframeSrc || iframeSrc === 'about:blank') {
+        if (next.url) loadUrlInIframe(next.iframe, next.url);
+      }
+    }
+  }
+  
+  function navigateTab(tabId, rawUrl) {
+    let url = rawUrl.trim();
+    if (!url.startsWith('http')) url = 'https://' + url;
+    const tab = tabsMap.get(tabId);
+    if (!tab) return;
+    
+    tab.url = url;
+    tab.title = url.length > 30 ? url.slice(0,30)+'...' : url;
+    // Actualizar título en pestaña
+    const tabElem = document.querySelector(`.tab[data-tab-id="${tabId}"]`);
+    if (tabElem) {
+      const titleSpan = tabElem.querySelector('.tab-title');
+      if (titleSpan) titleSpan.textContent = tab.title;
+    }
+    if (tabId === currentTabId) {
+      updateAddressBar(url);
+      loadUrlInIframe(tab.iframe, url);
+    } else {
+      // Si no es la pestaña activa, solo guardamos la URL
+      tab.iframe.setAttribute('data-pending-url', url);
+    }
+  }
+  
+  function loadUrlInIframe(iframeElement, url) {
+    const proxyUrl = `${WORKER_URL}/?url=${encodeURIComponent(url)}`;
+    iframeElement.src = proxyUrl;
+    showLoading(true);
+    iframeElement.onload = () => {
+      showLoading(false);
+      // Intentar extraer título del iframe (no podemos por CORS, pero podríamos mejorar)
+    };
+    iframeElement.onerror = () => {
+      showLoading(false);
+      console.error('Error cargando iframe');
+    };
+  }
+  
+  function closeTab(tabId) {
+    if (tabsMap.size <= 1) {
+      // No cerrar la última pestaña, mejor limpiarla
+      navigateTab(tabId, 'https://example.com');
+      return;
+    }
+    const tab = tabsMap.get(tabId);
+    if (tab) {
+      tab.iframe.remove();
+      tabsMap.delete(tabId);
+    }
+    const tabElem = document.querySelector(`.tab[data-tab-id="${tabId}"]`);
+    if (tabElem) tabElem.remove();
+    
+    // Activar primera pestaña disponible
+    const remainingTabs = document.querySelectorAll('.tab');
+    if (remainingTabs.length > 0) {
+      const firstTabId = parseInt(remainingTabs[0].dataset.tabId);
+      switchTab(firstTabId);
+    } else {
+      // Crear una nueva si no queda ninguna (no debería ocurrir)
+      addTab();
+    }
+  }
+  
+  // ========== UI Helpers ==========
+  function updateAddressBar(url) {
+    addressInput.value = url || '';
+  }
+  
+  function updateFavicon(url) {
+    // Podemos intentar mostrar el favicon del sitio, pero por ahora icono genérico
+    faviconDiv.textContent = '🌐';
+  }
+  
+  function showLoading(show) {
+    if (show) loadingOverlay.classList.remove('hidden');
+    else loadingOverlay.classList.add('hidden');
+  }
+  
+  function escapeHtml(str) {
+    return str.replace(/[&<>]/g, function(m) {
+      if (m === '&') return '&amp;';
+      if (m === '<') return '&lt;';
+      if (m === '>') return '&gt;';
+      return m;
+    });
+  }
+  
+  // ========== Eventos ==========
+  reloadBtn.onclick = () => {
+    const tab = tabsMap.get(currentTabId);
+    if (tab && tab.url) loadUrlInIframe(tab.iframe, tab.url);
+  };
+  
+  addressInput.addEventListener('keypress', (e) => {
+    if (e.key === 'Enter') {
+      const newUrl = addressInput.value.trim();
+      if (newUrl) navigateTab(currentTabId, newUrl);
+    }
+  });
+  
+  newTabBtn.onclick = () => {
+    const newId = addTab();
+    switchTab(newId);
+  };
+  
+  backBtn.onclick = () => {
+    // Historial no implementado por simplicidad, pero se puede añadir
+  };
+  forwardBtn.onclick = () => {};
+  
+  fullscreenBtn.onclick = () => {
+    const container = document.querySelector('.app-container');
+    if (container.requestFullscreen) container.requestFullscreen();
+    else if (container.webkitRequestFullscreen) container.webkitRequestFullscreen();
+  };
+  
+  // Delegación de eventos en pestañas
+  tabBar.addEventListener('click', (e) => {
+    const tabDiv = e.target.closest('.tab');
+    if (!tabDiv) return;
+    const tabId = parseInt(tabDiv.dataset.tabId);
+    if (e.target.classList.contains('tab-close')) {
+      e.stopPropagation();
+      closeTab(tabId);
+    } else {
+      switchTab(tabId);
+    }
+  });
+  
+  // Sidebar toggle
+  toggleBtn.onclick = () => {
+    sidebar.classList.toggle('expanded');
+  };
+  // Permitir expandir con hover en desktop? Opcional
+  
+  // Inicialización
+  function init() {
+    // Limpiar pestaña por defecto (la creada en HTML)
+    const defaultTab = tabsMap.get(0);
+    if (defaultTab) {
+      defaultTab.iframe = iframe;
+      tabsMap.set(0, defaultTab);
+    } else {
+      tabsMap.set(0, {
+        url: null,
+        title: 'New Tab',
+        iframe: iframe,
+        historyIndex: -1,
+        history: []
+      });
+    }
+    currentTabId = 0;
+    // Cargar página de inicio
+    navigateTab(0, 'https://example.com');
+  }
+  
+  init();
+</script>
+</body>
+</html>
