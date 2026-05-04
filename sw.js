@@ -1,49 +1,127 @@
-// Service Worker para proxy sin iframes
-const WORKER_URL = 'https://search.mathssupport.cat';
+/**
+ * sw.js — Service Worker for GitHub Pages
+ * Place this file at the ROOT of your repository (same level as index.html)
+ */
 
-self.addEventListener('install', event => {
-  self.skipWaiting();
-});
+// ─── CONFIGURATION ────────────────────────────────────────────────────────────
+const CACHE_NAME = "app-v1";
 
-self.addEventListener('activate', event => {
-  event.waitUntil(clients.claim());
-});
+// Your Cloudflare Worker proxy URL
+const PROXY_ORIGIN = "https://your-worker.your-subdomain.workers.dev";
 
-self.addEventListener('fetch', event => {
-  const request = event.request;
-  const url = new URL(request.url);
-  
-  // Si la petición es a nuestro propio Worker, dejarla pasar (evitar bucle)
-  if (url.origin === 'https://search.mathssupport.cat') {
-    event.respondWith(fetch(request));
-    return;
-  }
-  
-  // Si es una petición al mismo origen (browse.mathssupport.cat) pero no es la página principal,
-  // eso significa que el navegador intenta cargar recursos del proxy (CSS, JS, etc.) que el Worker reescribió.
-  // Debemos redirigirlas al Worker también.
-  if (url.origin === self.location.origin) {
-    // Si es la raíz o index.html, devolver el HTML principal (para que el SW controle la página)
-    if (url.pathname === '/' || url.pathname === '/index.html') {
-      event.respondWith(fetch(request));
-      return;
-    }
-    // Para otros recursos (CSS, JS, imágenes) relativos que el HTML del proxy pide,
-    // los redirigimos al Worker con la URL completa (que debería ser la URL original)
-    // Pero el HTML ya debería haber reescrito esas URLs para que apunten a search.mathssupport.cat/?url=...
-    // Así que este caso no debería darse. No obstante, lo dejamos pasar.
-    event.respondWith(fetch(request));
-    return;
-  }
-  
-  // Para cualquier otra petición (navegación o recursos), la redirigimos al Worker
-  // Esto incluye clics en enlaces que el HTML no reescribió, o recursos dinámicos.
-  event.respondWith(
-    fetch(`${WORKER_URL}/?url=${encodeURIComponent(request.url)}`, {
-      method: request.method,
-      headers: request.headers,
-      body: request.body,
-      redirect: 'manual'
-    })
+// Files to pre-cache on install (app shell)
+const PRECACHE_URLS = [
+  "./",
+  "./index.html",
+  "./sw.js",
+  // Add your CSS, JS, icon paths here:
+  // "./style.css",
+  // "./app.js",
+  // "./icons/icon-192.png",
+];
+
+// API path patterns that should ALWAYS go to the network (via proxy)
+const NETWORK_ONLY_PATTERNS = [
+  /\/api\//,
+  new RegExp(PROXY_ORIGIN.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")),
+];
+// ──────────────────────────────────────────────────────────────────────────────
+
+// ── Install ────────────────────────────────────────────────────────────────────
+self.addEventListener("install", (event) => {
+  console.log("[SW] Installing…");
+  event.waitUntil(
+    caches
+      .open(CACHE_NAME)
+      .then((cache) => cache.addAll(PRECACHE_URLS))
+      .then(() => self.skipWaiting()) // activate immediately
   );
+});
+
+// ── Activate ───────────────────────────────────────────────────────────────────
+self.addEventListener("activate", (event) => {
+  console.log("[SW] Activating…");
+  event.waitUntil(
+    caches
+      .keys()
+      .then((keys) =>
+        Promise.all(
+          keys
+            .filter((key) => key !== CACHE_NAME)
+            .map((key) => {
+              console.log("[SW] Deleting old cache:", key);
+              return caches.delete(key);
+            })
+        )
+      )
+      .then(() => self.clients.claim()) // take control immediately
+  );
+});
+
+// ── Fetch ──────────────────────────────────────────────────────────────────────
+self.addEventListener("fetch", (event) => {
+  const { request } = event;
+  const url = new URL(request.url);
+
+  // Skip non-GET and chrome-extension requests
+  if (request.method !== "GET" || url.protocol === "chrome-extension:") return;
+
+  // Network-only for API / proxy calls
+  if (NETWORK_ONLY_PATTERNS.some((p) => p.test(request.url))) {
+    event.respondWith(networkOnly(request));
+    return;
+  }
+
+  // Cache-first for everything else (app shell, assets)
+  event.respondWith(cacheFirst(request));
+});
+
+// ── Strategies ─────────────────────────────────────────────────────────────────
+
+/** Cache-first: serve from cache, fall back to network, then cache the result */
+async function cacheFirst(request) {
+  const cached = await caches.match(request);
+  if (cached) return cached;
+
+  try {
+    const response = await fetch(request);
+    if (response.ok) {
+      const cache = await caches.open(CACHE_NAME);
+      cache.put(request, response.clone());
+    }
+    return response;
+  } catch {
+    // Offline fallback
+    const fallback = await caches.match("./index.html");
+    if (fallback) return fallback;
+    return new Response("Offline — no cached content available.", {
+      status: 503,
+      headers: { "Content-Type": "text/plain" },
+    });
+  }
+}
+
+/** Network-only: always hit the network, no caching */
+async function networkOnly(request) {
+  try {
+    return await fetch(request);
+  } catch {
+    return new Response(
+      JSON.stringify({ error: "Network unavailable", offline: true }),
+      {
+        status: 503,
+        headers: { "Content-Type": "application/json" },
+      }
+    );
+  }
+}
+
+// ── Background sync helper (optional) ─────────────────────────────────────────
+self.addEventListener("message", (event) => {
+  if (event.data?.type === "SKIP_WAITING") {
+    self.skipWaiting();
+  }
+  if (event.data?.type === "GET_VERSION") {
+    event.ports[0].postMessage({ version: CACHE_NAME });
+  }
 });
