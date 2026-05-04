@@ -1,90 +1,457 @@
 <!DOCTYPE html>
-<html>
+<html lang="en">
 <head>
-  <meta charset="UTF-8">
-  <title>MathSupport Proxy</title>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>My App</title>
+  <meta name="description" content="GitHub Pages app with Cloudflare Worker proxy and Service Worker." />
+  <meta name="theme-color" content="#0f0f11" />
+
+  <!-- PWA manifest (optional) -->
+  <!-- <link rel="manifest" href="./manifest.json" /> -->
+
   <style>
-    * { margin:0; padding:0; box-sizing:border-box; }
-    body { background: #0a0e17; font-family: monospace; }
-    .bar {
-      background: #0f1420;
-      padding: 10px;
+    /* ── Reset & tokens ───────────────────────────────────────────────────── */
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+    :root {
+      --bg:        #0f0f11;
+      --surface:   #1a1a1f;
+      --border:    #2a2a35;
+      --accent:    #6ee7b7;
+      --accent2:   #38bdf8;
+      --text:      #e8e8f0;
+      --muted:     #6b6b80;
+      --danger:    #f87171;
+      --radius:    10px;
+      --font-mono: "JetBrains Mono", "Fira Code", ui-monospace, monospace;
+      --font-sans: "DM Sans", system-ui, sans-serif;
+    }
+
+    @import url('https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;700&family=JetBrains+Mono:wght@400;600&display=swap');
+
+    body {
+      background: var(--bg);
+      color: var(--text);
+      font-family: var(--font-sans);
+      min-height: 100dvh;
       display: flex;
-      gap: 8px;
-      border-bottom: 1px solid #2a303c;
-      position: sticky;
-      top: 0;
+      flex-direction: column;
+      align-items: center;
+      padding: 2rem 1rem 4rem;
     }
-    input {
-      flex: 1;
-      background: #1a1f2e;
-      border: none;
-      color: white;
-      padding: 8px 12px;
-      border-radius: 24px;
-      outline: none;
-    }
-    button {
-      background: #1a1f2e;
-      border: none;
-      color: white;
-      padding: 8px 16px;
-      border-radius: 24px;
-      cursor: pointer;
-    }
-    #content {
+
+    /* ── Header ───────────────────────────────────────────────────────────── */
+    header {
       width: 100%;
-      min-height: calc(100vh - 48px);
+      max-width: 780px;
+      padding: 2.5rem 0 2rem;
+      border-bottom: 1px solid var(--border);
+      margin-bottom: 2rem;
+    }
+
+    .badge {
+      display: inline-flex;
+      align-items: center;
+      gap: .4rem;
+      font-family: var(--font-mono);
+      font-size: .7rem;
+      color: var(--accent);
+      border: 1px solid var(--accent);
+      border-radius: 20px;
+      padding: .2rem .7rem;
+      margin-bottom: 1rem;
+      letter-spacing: .06em;
+      text-transform: uppercase;
+    }
+
+    .badge::before { content: "●"; font-size: .5rem; }
+
+    h1 {
+      font-size: clamp(1.8rem, 5vw, 2.8rem);
+      font-weight: 700;
+      line-height: 1.15;
+      letter-spacing: -.02em;
+      background: linear-gradient(135deg, var(--text) 30%, var(--accent));
+      -webkit-background-clip: text;
+      -webkit-text-fill-color: transparent;
+      background-clip: text;
+    }
+
+    header p {
+      margin-top: .6rem;
+      color: var(--muted);
+      font-size: .95rem;
+      max-width: 520px;
+    }
+
+    /* ── Main grid ────────────────────────────────────────────────────────── */
+    main {
+      width: 100%;
+      max-width: 780px;
+      display: flex;
+      flex-direction: column;
+      gap: 1.5rem;
+    }
+
+    /* ── Card ─────────────────────────────────────────────────────────────── */
+    .card {
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: var(--radius);
+      padding: 1.5rem;
+    }
+
+    .card-title {
+      font-size: .75rem;
+      font-family: var(--font-mono);
+      text-transform: uppercase;
+      letter-spacing: .1em;
+      color: var(--accent2);
+      margin-bottom: 1rem;
+    }
+
+    /* ── Request form ─────────────────────────────────────────────────────── */
+    .row {
+      display: flex;
+      gap: .6rem;
+      flex-wrap: wrap;
+      margin-bottom: .8rem;
+    }
+
+    select, input[type="text"] {
+      background: var(--bg);
+      color: var(--text);
+      border: 1px solid var(--border);
+      border-radius: 6px;
+      padding: .55rem .9rem;
+      font-family: var(--font-mono);
+      font-size: .85rem;
+      outline: none;
+      transition: border-color .2s;
+    }
+    select:focus, input[type="text"]:focus { border-color: var(--accent2); }
+
+    select { min-width: 90px; }
+    input[type="text"] { flex: 1; min-width: 200px; }
+
+    textarea {
+      width: 100%;
+      min-height: 90px;
+      resize: vertical;
+      background: var(--bg);
+      color: var(--text);
+      border: 1px solid var(--border);
+      border-radius: 6px;
+      padding: .7rem .9rem;
+      font-family: var(--font-mono);
+      font-size: .82rem;
+      outline: none;
+      transition: border-color .2s;
+      margin-bottom: .8rem;
+    }
+    textarea:focus { border-color: var(--accent2); }
+
+    button {
+      cursor: pointer;
+      border: none;
+      border-radius: 6px;
+      padding: .6rem 1.4rem;
+      font-family: var(--font-sans);
+      font-weight: 500;
+      font-size: .9rem;
+      transition: opacity .15s, transform .1s;
+    }
+    button:active { transform: scale(.97); }
+
+    .btn-primary {
+      background: var(--accent);
+      color: #0f0f11;
+    }
+    .btn-ghost {
+      background: transparent;
+      color: var(--muted);
+      border: 1px solid var(--border);
+    }
+    .btn-primary:hover { opacity: .88; }
+    .btn-ghost:hover   { border-color: var(--muted); color: var(--text); }
+
+    /* ── Response panel ───────────────────────────────────────────────────── */
+    .response-meta {
+      display: flex;
+      align-items: center;
+      gap: .7rem;
+      margin-bottom: .6rem;
+      font-size: .78rem;
+      font-family: var(--font-mono);
+    }
+
+    .status-pill {
+      padding: .2rem .6rem;
+      border-radius: 20px;
+      font-weight: 600;
+    }
+    .status-pill.ok  { background: rgba(110,231,183,.15); color: var(--accent); }
+    .status-pill.err { background: rgba(248,113,113,.15); color: var(--danger); }
+
+    .elapsed { color: var(--muted); }
+
+    pre {
+      background: var(--bg);
+      border: 1px solid var(--border);
+      border-radius: 6px;
+      padding: 1rem;
+      font-family: var(--font-mono);
+      font-size: .8rem;
+      line-height: 1.6;
+      overflow-x: auto;
+      max-height: 340px;
+      overflow-y: auto;
+      white-space: pre-wrap;
+      word-break: break-all;
+      color: var(--text);
+    }
+
+    .placeholder-text { color: var(--muted); font-style: italic; }
+
+    /* ── Status bar ───────────────────────────────────────────────────────── */
+    .status-row {
+      display: flex;
+      gap: 1rem;
+      flex-wrap: wrap;
+    }
+
+    .status-item {
+      display: flex;
+      flex-direction: column;
+      gap: .2rem;
+    }
+
+    .status-label {
+      font-size: .7rem;
+      font-family: var(--font-mono);
+      color: var(--muted);
+      text-transform: uppercase;
+      letter-spacing: .08em;
+    }
+
+    .status-value {
+      font-size: .85rem;
+      font-family: var(--font-mono);
+    }
+
+    .dot { display: inline-block; width: 8px; height: 8px; border-radius: 50%; margin-right: .35rem; }
+    .dot.green { background: var(--accent); box-shadow: 0 0 6px var(--accent); }
+    .dot.red   { background: var(--danger); }
+    .dot.grey  { background: var(--muted); }
+
+    /* ── Loading spinner ──────────────────────────────────────────────────── */
+    @keyframes spin { to { transform: rotate(360deg); } }
+    .spinner {
+      display: inline-block;
+      width: 14px; height: 14px;
+      border: 2px solid var(--border);
+      border-top-color: var(--accent);
+      border-radius: 50%;
+      animation: spin .6s linear infinite;
+      vertical-align: middle;
+      margin-right: .4rem;
     }
   </style>
 </head>
 <body>
-<div class="bar">
-  <input type="text" id="urlInput" placeholder="https://freezenova.com" autocomplete="off">
-  <button id="goBtn">Ir</button>
-</div>
-<div id="content">Cargando...</div>
 
-<script>
-  const WORKER = 'https://search.mathssupport.cat';
-  const input = document.getElementById('urlInput');
-  const goBtn = document.getElementById('goBtn');
-  const contentDiv = document.getElementById('content');
+  <header>
+    <div class="badge">GitHub Pages + Cloudflare Worker</div>
+    <h1>Proxy Client</h1>
+    <p>Make requests through your Cloudflare Worker reverse proxy with offline support via Service Worker.</p>
+  </header>
 
-  async function loadUrl(url) {
-    if (!url.startsWith('http')) url = 'https://' + url;
-    contentDiv.innerHTML = '<div style="color:white; padding:20px;">Cargando...</div>';
-    try {
-      const proxyUrl = `${WORKER}/?url=${encodeURIComponent(url)}`;
-      const response = await fetch(proxyUrl);
-      if (!response.ok) throw new Error(`HTTP ${response.status}`);
-      const html = await response.text();
-      // Inyectar el HTML directamente
-      contentDiv.innerHTML = html;
-      // Reescribir enlaces dentro del contenido para que sigan usando el proxy
-      contentDiv.querySelectorAll('a').forEach(a => {
-        const href = a.getAttribute('href');
-        if (href && href.startsWith('http')) {
-          a.href = `javascript:void(0)`;
-          a.onclick = (e) => {
-            e.preventDefault();
-            loadUrl(href);
-            input.value = href;
-          };
-        }
-      });
-      // Actualizar barra de direcciones
-      input.value = url;
-    } catch (err) {
-      contentDiv.innerHTML = `<div style="color:red; padding:20px;">Error: ${err.message}</div>`;
+  <main>
+
+    <!-- ── Status card ────────────────────────────────────────────────────── -->
+    <div class="card">
+      <div class="card-title">Status</div>
+      <div class="status-row">
+        <div class="status-item">
+          <span class="status-label">Service Worker</span>
+          <span class="status-value" id="sw-status">
+            <span class="dot grey"></span>Checking…
+          </span>
+        </div>
+        <div class="status-item">
+          <span class="status-label">Online</span>
+          <span class="status-value" id="online-status">
+            <span class="dot grey"></span>Checking…
+          </span>
+        </div>
+        <div class="status-item">
+          <span class="status-label">Worker URL</span>
+          <span class="status-value" id="worker-url-display" style="color:var(--muted)">Not set</span>
+        </div>
+      </div>
+    </div>
+
+    <!-- ── Request card ───────────────────────────────────────────────────── -->
+    <div class="card">
+      <div class="card-title">Request</div>
+
+      <div class="row">
+        <input type="text" id="worker-url" placeholder="https://your-worker.workers.dev"
+               value="" style="flex:2" />
+      </div>
+
+      <div class="row">
+        <select id="method">
+          <option>GET</option>
+          <option>POST</option>
+          <option>PUT</option>
+          <option>PATCH</option>
+          <option>DELETE</option>
+        </select>
+        <input type="text" id="path" placeholder="/api/your-endpoint" value="/api/" />
+      </div>
+
+      <textarea id="body-input" placeholder='Request body (JSON) — only for POST/PUT/PATCH&#10;{"key": "value"}'></textarea>
+
+      <div class="row">
+        <button class="btn-primary" id="send-btn">Send Request</button>
+        <button class="btn-ghost" id="clear-btn">Clear</button>
+      </div>
+    </div>
+
+    <!-- ── Response card ──────────────────────────────────────────────────── -->
+    <div class="card">
+      <div class="card-title">Response</div>
+      <div class="response-meta" id="response-meta" style="display:none">
+        <span class="status-pill" id="status-pill"></span>
+        <span class="elapsed" id="elapsed"></span>
+      </div>
+      <pre id="response-output"><span class="placeholder-text">Response will appear here…</span></pre>
+    </div>
+
+  </main>
+
+  <script>
+    // ── Config ───────────────────────────────────────────────────────────────
+    const WORKER_URL_KEY = "cf_worker_url";
+
+    // ── Restore saved worker URL ─────────────────────────────────────────────
+    const workerInput = document.getElementById("worker-url");
+    const saved = localStorage.getItem(WORKER_URL_KEY);
+    if (saved) {
+      workerInput.value = saved;
+      document.getElementById("worker-url-display").textContent = saved;
     }
-  }
 
-  goBtn.onclick = () => loadUrl(input.value);
-  input.onkeypress = (e) => { if (e.key === 'Enter') loadUrl(input.value); };
-  
-  // Cargar una web de ejemplo
-  loadUrl('https://example.com');
-</script>
+    workerInput.addEventListener("input", () => {
+      const val = workerInput.value.trim();
+      localStorage.setItem(WORKER_URL_KEY, val);
+      document.getElementById("worker-url-display").textContent = val || "Not set";
+    });
+
+    // ── Online status ────────────────────────────────────────────────────────
+    function updateOnlineStatus() {
+      const el = document.getElementById("online-status");
+      if (navigator.onLine) {
+        el.innerHTML = '<span class="dot green"></span>Online';
+      } else {
+        el.innerHTML = '<span class="dot red"></span>Offline';
+      }
+    }
+    updateOnlineStatus();
+    window.addEventListener("online",  updateOnlineStatus);
+    window.addEventListener("offline", updateOnlineStatus);
+
+    // ── Service Worker registration ──────────────────────────────────────────
+    const swStatusEl = document.getElementById("sw-status");
+
+    if ("serviceWorker" in navigator) {
+      navigator.serviceWorker
+        .register("./sw.js", { scope: "./" })
+        .then((reg) => {
+          swStatusEl.innerHTML = '<span class="dot green"></span>Active';
+          console.log("[SW] Registered:", reg.scope);
+        })
+        .catch((err) => {
+          swStatusEl.innerHTML = '<span class="dot red"></span>Failed';
+          console.error("[SW] Registration failed:", err);
+        });
+    } else {
+      swStatusEl.innerHTML = '<span class="dot grey"></span>Not supported';
+    }
+
+    // ── Request logic ────────────────────────────────────────────────────────
+    const sendBtn    = document.getElementById("send-btn");
+    const clearBtn   = document.getElementById("clear-btn");
+    const methodSel  = document.getElementById("method");
+    const pathInput  = document.getElementById("path");
+    const bodyInput  = document.getElementById("body-input");
+    const outputEl   = document.getElementById("response-output");
+    const metaEl     = document.getElementById("response-meta");
+    const pillEl     = document.getElementById("status-pill");
+    const elapsedEl  = document.getElementById("elapsed");
+
+    sendBtn.addEventListener("click", async () => {
+      const workerBase = workerInput.value.trim().replace(/\/$/, "");
+      if (!workerBase) {
+        alert("Please enter your Cloudflare Worker URL.");
+        return;
+      }
+
+      const method = methodSel.value;
+      const path   = pathInput.value.trim() || "/";
+      const url    = workerBase + path;
+
+      // Show loading
+      sendBtn.innerHTML = '<span class="spinner"></span>Sending…';
+      sendBtn.disabled = true;
+      outputEl.innerHTML = '<span class="placeholder-text">Waiting for response…</span>';
+      metaEl.style.display = "none";
+
+      const options = { method, headers: { "Content-Type": "application/json" } };
+      if (!["GET", "HEAD"].includes(method) && bodyInput.value.trim()) {
+        options.body = bodyInput.value.trim();
+      }
+
+      const t0 = performance.now();
+      try {
+        const res  = await fetch(url, options);
+        const ms   = Math.round(performance.now() - t0);
+        const text = await res.text();
+
+        // Pretty-print JSON if possible
+        let display;
+        try {
+          display = JSON.stringify(JSON.parse(text), null, 2);
+        } catch {
+          display = text;
+        }
+
+        outputEl.textContent = display;
+        metaEl.style.display = "flex";
+        pillEl.textContent   = `${res.status} ${res.statusText}`;
+        pillEl.className     = `status-pill ${res.ok ? "ok" : "err"}`;
+        elapsedEl.textContent = `${ms} ms`;
+
+      } catch (err) {
+        outputEl.textContent = `Error: ${err.message}`;
+        metaEl.style.display = "flex";
+        pillEl.textContent   = "Network Error";
+        pillEl.className     = "status-pill err";
+        elapsedEl.textContent = `${Math.round(performance.now() - t0)} ms`;
+      } finally {
+        sendBtn.innerHTML = "Send Request";
+        sendBtn.disabled  = false;
+      }
+    });
+
+    clearBtn.addEventListener("click", () => {
+      bodyInput.value = "";
+      pathInput.value = "/api/";
+      outputEl.innerHTML = '<span class="placeholder-text">Response will appear here…</span>';
+      metaEl.style.display = "none";
+    });
+  </script>
 </body>
 </html>
