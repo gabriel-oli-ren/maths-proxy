@@ -1,127 +1,74 @@
 /**
- * sw.js — Service Worker for GitHub Pages
- * Place this file at the ROOT of your repository (same level as index.html)
+ * sw.js — Service Worker for browse.mathssupport.cat
+ * Caches the app shell; all proxy requests go direct to the network.
  */
 
-// ─── CONFIGURATION ────────────────────────────────────────────────────────────
-const CACHE_NAME = "app-v1";
+const CACHE     = "mathsbrowser-v1";
+const PROXY     = "https://search.mathssupport.cat";
+const SELF_HOST = self.location.origin; // https://browse.mathssupport.cat
 
-// Your Cloudflare Worker proxy URL
-const PROXY_ORIGIN = "https://your-worker.your-subdomain.workers.dev";
-
-// Files to pre-cache on install (app shell)
-const PRECACHE_URLS = [
+// App shell — pre-cached on install
+const SHELL = [
   "./",
   "./index.html",
   "./sw.js",
-  // Add your CSS, JS, icon paths here:
-  // "./style.css",
-  // "./app.js",
-  // "./icons/icon-192.png",
 ];
 
-// API path patterns that should ALWAYS go to the network (via proxy)
-const NETWORK_ONLY_PATTERNS = [
-  /\/api\//,
-  new RegExp(PROXY_ORIGIN.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")),
-];
-// ──────────────────────────────────────────────────────────────────────────────
-
-// ── Install ────────────────────────────────────────────────────────────────────
-self.addEventListener("install", (event) => {
-  console.log("[SW] Installing…");
-  event.waitUntil(
-    caches
-      .open(CACHE_NAME)
-      .then((cache) => cache.addAll(PRECACHE_URLS))
-      .then(() => self.skipWaiting()) // activate immediately
+// ── Install: cache shell ──────────────────────────────────────────────────────
+self.addEventListener("install", (e) => {
+  e.waitUntil(
+    caches.open(CACHE).then(c => c.addAll(SHELL)).then(() => self.skipWaiting())
   );
 });
 
-// ── Activate ───────────────────────────────────────────────────────────────────
-self.addEventListener("activate", (event) => {
-  console.log("[SW] Activating…");
-  event.waitUntil(
-    caches
-      .keys()
-      .then((keys) =>
-        Promise.all(
-          keys
-            .filter((key) => key !== CACHE_NAME)
-            .map((key) => {
-              console.log("[SW] Deleting old cache:", key);
-              return caches.delete(key);
-            })
-        )
-      )
-      .then(() => self.clients.claim()) // take control immediately
+// ── Activate: clear old caches ────────────────────────────────────────────────
+self.addEventListener("activate", (e) => {
+  e.waitUntil(
+    caches.keys()
+      .then(keys => Promise.all(keys.filter(k => k !== CACHE).map(k => caches.delete(k))))
+      .then(() => self.clients.claim())
   );
 });
 
-// ── Fetch ──────────────────────────────────────────────────────────────────────
-self.addEventListener("fetch", (event) => {
-  const { request } = event;
+// ── Fetch ─────────────────────────────────────────────────────────────────────
+self.addEventListener("fetch", (e) => {
+  const { request } = e;
   const url = new URL(request.url);
 
-  // Skip non-GET and chrome-extension requests
-  if (request.method !== "GET" || url.protocol === "chrome-extension:") return;
+  // Skip non-GET
+  if (request.method !== "GET") return;
 
-  // Network-only for API / proxy calls
-  if (NETWORK_ONLY_PATTERNS.some((p) => p.test(request.url))) {
-    event.respondWith(networkOnly(request));
+  // NETWORK ONLY: anything not on our own GitHub Pages origin
+  // (i.e. all requests to the Cloudflare proxy go straight to the network)
+  if (url.origin !== SELF_HOST) {
+    e.respondWith(fetch(request).catch(() =>
+      new Response(JSON.stringify({ error: "Network unavailable", offline: true }), {
+        status: 503,
+        headers: { "Content-Type": "application/json" },
+      })
+    ));
     return;
   }
 
-  // Cache-first for everything else (app shell, assets)
-  event.respondWith(cacheFirst(request));
+  // CACHE FIRST: app shell and same-origin assets
+  e.respondWith(
+    caches.match(request).then(cached => {
+      if (cached) return cached;
+      return fetch(request).then(res => {
+        if (res.ok) {
+          const clone = res.clone();
+          caches.open(CACHE).then(c => c.put(request, clone));
+        }
+        return res;
+      }).catch(() =>
+        caches.match("./index.html") // offline fallback
+      );
+    })
+  );
 });
 
-// ── Strategies ─────────────────────────────────────────────────────────────────
-
-/** Cache-first: serve from cache, fall back to network, then cache the result */
-async function cacheFirst(request) {
-  const cached = await caches.match(request);
-  if (cached) return cached;
-
-  try {
-    const response = await fetch(request);
-    if (response.ok) {
-      const cache = await caches.open(CACHE_NAME);
-      cache.put(request, response.clone());
-    }
-    return response;
-  } catch {
-    // Offline fallback
-    const fallback = await caches.match("./index.html");
-    if (fallback) return fallback;
-    return new Response("Offline — no cached content available.", {
-      status: 503,
-      headers: { "Content-Type": "text/plain" },
-    });
-  }
-}
-
-/** Network-only: always hit the network, no caching */
-async function networkOnly(request) {
-  try {
-    return await fetch(request);
-  } catch {
-    return new Response(
-      JSON.stringify({ error: "Network unavailable", offline: true }),
-      {
-        status: 503,
-        headers: { "Content-Type": "application/json" },
-      }
-    );
-  }
-}
-
-// ── Background sync helper (optional) ─────────────────────────────────────────
-self.addEventListener("message", (event) => {
-  if (event.data?.type === "SKIP_WAITING") {
-    self.skipWaiting();
-  }
-  if (event.data?.type === "GET_VERSION") {
-    event.ports[0].postMessage({ version: CACHE_NAME });
-  }
+// ── Message: skip waiting / version query ─────────────────────────────────────
+self.addEventListener("message", (e) => {
+  if (e.data?.type === "SKIP_WAITING") self.skipWaiting();
+  if (e.data?.type === "VERSION") e.ports[0]?.postMessage({ cache: CACHE });
 });
