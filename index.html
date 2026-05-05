@@ -430,11 +430,12 @@
 
       <div class="engine-row">
         <span class="engine-label">Engine:</span>
-        <button class="engine-btn active" data-engine="brave">🦁 Brave</button>
-        <button class="engine-btn" data-engine="ddg">🦆 DuckDuckGo</button>
+        <button class="engine-btn" data-engine="brave" title="Brave blocks proxy IPs — may not work">🦁 Brave*</button>
+        <button class="engine-btn active" data-engine="ddg">🦆 DuckDuckGo</button>
         <button class="engine-btn" data-engine="startpage">🕵️ Startpage</button>
         <button class="engine-btn" data-engine="ecosia">🌿 Ecosia</button>
       </div>
+      <div style="font-family:var(--mono);font-size:.6rem;color:var(--muted)">* Brave Search blocks datacenter IPs — use DDG if it fails</div>
 
       <div class="splash-sub">Quick links</div>
       <div class="quick-links">
@@ -485,7 +486,7 @@ const ENGINES = {
   ecosia:    { name: "Ecosia",        icon: "🌿", url: q => `https://www.ecosia.org/search?q=${encodeURIComponent(q)}` },
 };
 
-let activeEngine = localStorage.getItem("engine") || "brave";
+let activeEngine = localStorage.getItem("engine") || "ddg";
 
 // ═══════════════════════════════════════════════════════════════════════════════
 // Tab Manager
